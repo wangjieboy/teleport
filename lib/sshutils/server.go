@@ -29,6 +29,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gravitational/teleport"
@@ -67,6 +68,9 @@ type Server struct {
 
 	closeContext context.Context
 	closeFunc    context.CancelFunc
+
+	// conns tracks amount of current active connections
+	conns int32
 }
 
 const (
@@ -234,8 +238,42 @@ func (s *Server) setListener(l net.Listener) error {
 
 // Wait waits until server stops serving new connections
 // on the listener socket
-func (s *Server) Wait() {
-	<-s.closeContext.Done()
+func (s *Server) Wait(ctx context.Context) {
+	select {
+	case <-s.closeContext.Done():
+	case <-ctx.Done():
+	}
+}
+
+// Shutdown initiates graceful shutdown - waiting until all active
+// connections will get closed
+func (s *Server) Shutdown(ctx context.Context) error {
+	// close listener to stop receiving new connections
+	err := s.Close()
+	s.Wait(ctx)
+	activeConnections := s.trackConnections(0)
+	if activeConnections == 0 {
+		return err
+	}
+	s.Infof("Shutdown: waiting for %v connections to finish.", activeConnections)
+	lastReport := time.Time{}
+	ticker := time.NewTicker(500 * time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			activeConnections = s.trackConnections(0)
+			if activeConnections == 0 {
+				return err
+			}
+			if time.Now().Sub(lastReport) > 5*time.Second {
+				s.Infof("Shutdown: waiting for %v connections to finish.", activeConnections)
+				lastReport = time.Now()
+			}
+		case <-ctx.Done():
+			s.Infof("Context cancelled wait, returning")
+			return err
+		}
+	}
 }
 
 // Close closes listening socket and stops accepting connections
@@ -282,6 +320,10 @@ func (s *Server) acceptConnections() {
 	}
 }
 
+func (s *Server) trackConnections(delta int32) int32 {
+	return atomic.AddInt32(&s.conns, delta)
+}
+
 // handleConnection is called every time an SSH server accepts a new
 // connection from a client.
 //
@@ -289,6 +331,8 @@ func (s *Server) acceptConnections() {
 // and proxies, proxies and servers, servers and auth, etc).
 //
 func (s *Server) handleConnection(conn net.Conn) {
+	s.trackConnections(1)
+	defer s.trackConnections(-1)
 	// initiate an SSH connection, note that we don't need to close the conn here
 	// in case of error as ssh server takes care of this
 	remoteAddr, _, err := net.SplitHostPort(conn.RemoteAddr().String())

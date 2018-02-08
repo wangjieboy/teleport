@@ -17,6 +17,7 @@ limitations under the License.
 package common
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -219,7 +220,7 @@ func OnStart(config *service.Config) error {
 		defer f.Close()
 	}
 
-	return trace.Wrap(srv.Wait())
+	return srv.WaitForSignals(context.TODO())
 }
 
 // onStatus is the handler for "status" CLI command

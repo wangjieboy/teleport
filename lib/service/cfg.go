@@ -202,12 +202,12 @@ func (c CachePolicy) String() string {
 		recentCachePolicy = fmt.Sprintf("will cache frequently accessed items for %v", c.GetRecentTTL())
 	}
 	if c.NeverExpires {
-		return fmt.Sprintf("cache will not expire in case if connection to database is lost, %v", recentCachePolicy)
+		return fmt.Sprintf("cache that will not expire in case if connection to database is lost, %v", recentCachePolicy)
 	}
 	if c.TTL == 0 {
-		return fmt.Sprintf("cache will expire after connection to database is lost after %v, %v", defaults.CacheTTL, recentCachePolicy)
+		return fmt.Sprintf("cache that will expire after connection to database is lost after %v, %v", defaults.CacheTTL, recentCachePolicy)
 	}
-	return fmt.Sprintf("cache will expire after connection to database is lost after %v, %v", c.TTL, recentCachePolicy)
+	return fmt.Sprintf("cache that will expire after connection to database is lost after %v, %v", c.TTL, recentCachePolicy)
 }
 
 // ProxyConfig configures proy service
