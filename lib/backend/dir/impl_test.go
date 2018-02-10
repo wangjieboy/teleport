@@ -57,6 +57,23 @@ func (s *Suite) SetUpSuite(c *check.C) {
 	s.suite.B = s.bk
 }
 
+func (s *Suite) BenchmarkOperations(c *check.C) {
+	bucket := []string{"bench", "bucket"}
+	keys := []string{"key1", "key2", "key3", "key4", "key5"}
+	value1 := "some backend value, not large enough, but not small enought"
+	for i := 0; i < c.N; i++ {
+		for _, key := range keys {
+			err := s.bk.UpsertVal(bucket, key, []byte(value1), time.Hour)
+			c.Assert(err, check.IsNil)
+			bytes, err := s.bk.GetVal(bucket, key)
+			c.Assert(err, check.IsNil)
+			c.Assert(string(bytes), check.Equals, value1)
+			err = s.bk.DeleteKey(bucket, key)
+			c.Assert(err, check.IsNil)
+		}
+	}
+}
+
 func (s *Suite) TestConcurrentOperations(c *check.C) {
 	bucket := []string{"concurrent", "bucket"}
 
